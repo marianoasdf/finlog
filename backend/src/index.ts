@@ -10,6 +10,11 @@ app.get('/', (req, res) => {
   res.send('API funcionando');
 });
 
+// Endpoint keep-alive para self-ping
+app.get('/api/_app_ping', (req, res) => {
+  res.status(200).send('pong');
+});
+
 // Endpoint para crear una categoría
 app.post('/categories', async (req, res) => {
   const { name } = req.body;
@@ -64,4 +69,19 @@ app.post('/movements', async (req, res) => {
 
 app.listen(port, () => {
   console.log(`Servidor escuchando en puerto ${port}`);
+
+  // Self-ping para Render Free Tier (puede ser bloqueado por Render)
+  const selfUrl = process.env.API_BASE_URL;
+  if (process.env.NODE_ENV === 'production' && selfUrl) {
+    const interval = 14 * 60 * 1000; // 14 minutos
+    setInterval(async () => {
+      try {
+        const res = await fetch(`${selfUrl}/api/_app_ping`);
+        console.log(`[keep-alive] ping ${res.status}`);
+      } catch (err) {
+        console.warn('[keep-alive] ping falló:', (err instanceof Error ? err.message : err));
+      }
+    }, interval);
+    console.log(`[keep-alive] self-ping activo cada ${interval / 60000} min → ${selfUrl}api/_app_ping`);
+  }
 });
