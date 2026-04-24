@@ -7,6 +7,8 @@ import TransactionList from './components/TransactionList';
 import ManualMonthForm from './components/ManualMonthForm';
 import YearlySection from './components/YearlySection';
 
+import LoginRegisterScreen from './components/LoginRegisterScreen';
+
 type TransactionType = 'income' | 'expense';
 interface Transaction {
   id: string;
@@ -50,6 +52,9 @@ function groupByYearAndMonth(transactions: Transaction[]) {
 // ...existing code...
 
 export default function App() {
+
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // ...el resto de tus estados
   const [input, setInput] = useState('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [manualType, setManualType] = useState<TransactionType | null>(null);
@@ -59,34 +64,38 @@ export default function App() {
     month: string;
     categories: { cat: string; amt: number }[];
   }[]>([]);
-    const [showManualMonthForm, setShowManualMonthForm] = useState(false);
-    const [manualYear, setManualYear] = useState('2024');
-    const [manualMonth, setManualMonth] = useState('01');
-    const [manualCats, setManualCats] = useState<{ cat: string; amt: string }[]>([{ cat: '', amt: '' }]);
+  const [showManualMonthForm, setShowManualMonthForm] = useState(false);
+  const [manualYear, setManualYear] = useState('2024');
+  const [manualMonth, setManualMonth] = useState('01');
+  const [manualCats, setManualCats] = useState<{ cat: string; amt: string }[]>([{ cat: '', amt: '' }]);
+  if (!isAuthenticated) {
+    return <LoginRegisterScreen onLoginSuccess={() => setIsAuthenticated(true)} />;
+  }
 
-  const addTransaction = () => {
-    const parsed = parseInput(input);
-    if (!parsed) {
-      setInputError('Formato inválido. Ejemplo: comida 8500');
-      return;
-    }
-    setInputError('');
-    const { category, amount } = parsed;
-    const autoType = detectType(category);
-    const type = manualType || autoType;
-    const newTransaction: Transaction = {
-      id: Date.now().toString() + Math.random().toString(36).slice(2),
-      type,
-      category,
-      amount,
-      date: new Date(),
-    };
-    setTransactions([newTransaction, ...transactions]);
-    setInput('');
-    setManualType(null);
-  };
-
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+  return (
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.container}>
+        <SummaryPanel totalIncome={totalIncome} totalExpense={totalExpense} balance={balance} />
+        <TransactionInput
+          input={input}
+          setInput={text => {
+            setInput(text);
+            if (inputError) setInputError('');
+          }}
+          manualType={manualType}
+          setManualType={setManualType}
+          inputError={inputError}
+          onAdd={addTransaction}
+        />
+        <TransactionList transactions={transactions} />
+        <ScrollView style={{ marginTop: 24 }}>
+          {allYears.map(year => (
+            <YearlySection key={year} year={year} grouped={grouped} manualGrouped={manualGrouped} />
+          ))}
+        </ScrollView>
+      </SafeAreaView>
+    </SafeAreaProvider>
+  );
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
   const balance = totalIncome - totalExpense;
 
