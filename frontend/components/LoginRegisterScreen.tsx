@@ -31,6 +31,11 @@ export default function LoginRegisterScreen({ onLoginSuccess }: Props) {
   );
 
   React.useEffect(() => {
+    // Debug: mostrar el response de AuthSession
+    if (response) {
+      console.log('AuthSession response:', response);
+      Alert.alert('DEBUG', JSON.stringify(response));
+    }
     const doGoogleLogin = async () => {
       if (response?.type === 'success' && response.params?.id_token) {
         try {
