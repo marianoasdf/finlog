@@ -39,3 +39,5 @@ CREATE INDEX IF NOT EXISTS idx_movements_year_month ON movements(year, month);
 -- Asegura que las columnas de verificación de email existan (idempotente)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255);
+-- Google Auth: columna para guardar el sub de Google
+ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255);
