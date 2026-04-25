@@ -25,6 +25,7 @@ export default function LoginRegisterScreen({ onLoginSuccess }: Props) {
       responseType: 'id_token',
       scopes: ['openid', 'email', 'profile'],
       extraParams: { nonce: 'randomnonce' },
+      usePKCE: false
     },
     { authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth' }
   );
