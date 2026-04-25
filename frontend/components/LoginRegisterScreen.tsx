@@ -21,7 +21,7 @@ export default function LoginRegisterScreen({ onLoginSuccess }: Props) {
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
       clientId: GOOGLE_CLIENT_ID,
-      redirectUri: AuthSession.makeRedirectUri(),
+      redirectUri: 'https://finlog-green.vercel.app/',
       responseType: 'id_token',
       scopes: ['openid', 'email', 'profile'],
       extraParams: { nonce: 'randomnonce' },
