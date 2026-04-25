@@ -148,8 +148,12 @@ export default function App() {
   };
 
 
+
   if (!isAuthenticated) {
-    return <LoginRegisterScreen onLoginSuccess={() => setIsAuthenticated(true)} />;
+    return <LoginRegisterScreen onLoginSuccess={async () => {
+      const token = await AsyncStorage.getItem('token');
+      if (token) setIsAuthenticated(true);
+    }} />;
   }
 
   return (
