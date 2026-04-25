@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StyleSheet, ScrollView, Button } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import SummaryPanel from './components/SummaryPanel';
@@ -7,7 +8,9 @@ import TransactionList from './components/TransactionList';
 import ManualMonthForm from './components/ManualMonthForm';
 import YearlySection from './components/YearlySection';
 
+
 import LoginRegisterScreen from './components/LoginRegisterScreen';
+import { authFetch } from './utils/api';
 
 type TransactionType = 'income' | 'expense';
 interface Transaction {
@@ -52,9 +55,7 @@ function groupByYearAndMonth(transactions: Transaction[]) {
 // ...existing code...
 
 export default function App() {
-
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  // ...el resto de tus estados
   const [input, setInput] = useState('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [manualType, setManualType] = useState<TransactionType | null>(null);
@@ -68,6 +69,85 @@ export default function App() {
   const [manualYear, setManualYear] = useState('2024');
   const [manualMonth, setManualMonth] = useState('01');
   const [manualCats, setManualCats] = useState<{ cat: string; amt: string }[]>([{ cat: '', amt: '' }]);
+
+  useEffect(() => {
+    const checkToken = async () => {
+      const token = await AsyncStorage.getItem('token');
+      if (token) setIsAuthenticated(true);
+    };
+    checkToken();
+  }, []);
+
+  // Obtener movimientos protegidos al autenticar
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const fetchMovements = async () => {
+      try {
+        const res = await authFetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/auth'}/../movements`);
+        if (!res.ok) throw new Error('Error al obtener movimientos');
+        const data = await res.json();
+        setTransactions(data.map((t: any) => ({ ...t, date: new Date(t.date) })));
+      } catch (err) {
+        setTransactions([]);
+      }
+    };
+    fetchMovements();
+  }, [isAuthenticated]);
+
+  // Calcular totales y agrupaciones
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+  const balance = totalIncome - totalExpense;
+  const grouped = groupByYearAndMonth(transactions);
+  const years = Object.keys(grouped).sort((a, b) => Number(b) - Number(a));
+  const manualGrouped: Record<string, Record<string, { cat: string; amt: number }[]>> = {};
+  manualMonths.forEach(m => {
+    if (!manualGrouped[m.year]) manualGrouped[m.year] = {};
+    manualGrouped[m.year][m.month] = m.categories;
+  });
+  const allYears = Array.from(new Set([...years, ...Object.keys(manualGrouped)])).sort((a, b) => Number(b) - Number(a));
+
+
+  // Función para agregar transacción a la lista
+  const addTransaction = (tx: Transaction) => {
+    setTransactions(prev => [tx, ...prev]);
+  };
+
+  // Handler para el input y botón "Agregar"
+  const handleAddTransaction = async () => {
+    const parsed = parseInput(input);
+    if (!parsed) {
+      setInputError('Formato inválido. Ej: comida 8500');
+      return;
+    }
+    const { category, amount } = parsed;
+    const type = manualType ?? detectType(category);
+    try {
+      const res = await authFetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/movements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          type,
+          category,
+          amount,
+          date: new Date().toISOString(),
+        }),
+      });
+      if (!res.ok) throw new Error('Error al guardar en backend');
+      const saved = await res.json();
+      // El backend debe devolver el movimiento guardado (con id y date)
+      addTransaction({
+        ...saved,
+        date: new Date(saved.date),
+      });
+      setInput('');
+      setManualType(null);
+      setInputError('');
+    } catch (err) {
+      setInputError('No se pudo guardar en backend');
+    }
+  };
+
+
   if (!isAuthenticated) {
     return <LoginRegisterScreen onLoginSuccess={() => setIsAuthenticated(true)} />;
   }
@@ -85,43 +165,7 @@ export default function App() {
           manualType={manualType}
           setManualType={setManualType}
           inputError={inputError}
-          onAdd={addTransaction}
-        />
-        <TransactionList transactions={transactions} />
-        <ScrollView style={{ marginTop: 24 }}>
-          {allYears.map(year => (
-            <YearlySection key={year} year={year} grouped={grouped} manualGrouped={manualGrouped} />
-          ))}
-        </ScrollView>
-      </SafeAreaView>
-    </SafeAreaProvider>
-  );
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-  const balance = totalIncome - totalExpense;
-
-  const grouped = groupByYearAndMonth(transactions);
-  const years = Object.keys(grouped).sort((a, b) => Number(b) - Number(a));
-  const manualGrouped: Record<string, Record<string, { cat: string; amt: number }[]>> = {};
-  manualMonths.forEach(m => {
-    if (!manualGrouped[m.year]) manualGrouped[m.year] = {};
-    manualGrouped[m.year][m.month] = m.categories;
-  });
-  const allYears = Array.from(new Set([...years, ...Object.keys(manualGrouped)])).sort((a, b) => Number(b) - Number(a));
-
-  return (
-    <SafeAreaProvider>
-      <SafeAreaView style={styles.container}>
-        <SummaryPanel totalIncome={totalIncome} totalExpense={totalExpense} balance={balance} />
-        <TransactionInput
-          input={input}
-          setInput={text => {
-            setInput(text);
-            if (inputError) setInputError('');
-          }}
-          manualType={manualType}
-          setManualType={setManualType}
-          inputError={inputError}
-          onAdd={addTransaction}
+          onAdd={handleAddTransaction}
         />
         <TransactionList transactions={transactions} />
         <ScrollView style={{ marginTop: 24 }}>

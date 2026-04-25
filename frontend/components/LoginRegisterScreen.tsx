@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import * as AuthSession from 'expo-auth-session';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://localhost:3001/auth'; // Cambia esto si usas IP LAN o producción
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/auth'; // Usa variable de entorno en prod
 const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
 
 type Props = {
@@ -39,6 +40,7 @@ export default function LoginRegisterScreen({ onLoginSuccess }: Props) {
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Error');
+          await AsyncStorage.setItem('token', data.token);
           Alert.alert('Login Google exitoso', `Bienvenido ${data.user.username}`);
           if (onLoginSuccess) onLoginSuccess();
         } catch (err: any) {

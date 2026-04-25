@@ -1,6 +1,7 @@
+
 import express from 'express';
 import { pool } from './db';
-
+import { authenticateJWT } from './authMiddleware';
 import authRouter from './auth';
 
 const app = express();
@@ -21,7 +22,7 @@ app.get('/api/_app_ping', (req, res) => {
 });
 
 // Endpoint para crear una categoría
-app.post('/categories', async (req, res) => {
+app.post('/categories', authenticateJWT, async (req, res) => {
   const { name } = req.body;
   if (!name) {
     return res.status(400).json({ error: 'Falta el nombre de la categoría' });
@@ -44,7 +45,7 @@ app.post('/categories', async (req, res) => {
 });
 
 // Endpoint para listar movimientos
-app.get('/movements', async (req, res) => {
+app.get('/movements', authenticateJWT, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM movements ORDER BY date DESC LIMIT 50');
     res.json(result.rows);
@@ -55,7 +56,7 @@ app.get('/movements', async (req, res) => {
 });
 
 // Endpoint para crear un movimiento
-app.post('/movements', async (req, res) => {
+app.post('/movements', authenticateJWT, async (req, res) => {
   const { type, category_id, amount, date } = req.body;
   if (!type || !category_id || !amount || !date) {
     return res.status(400).json({ error: 'Faltan campos requeridos' });
