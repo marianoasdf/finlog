@@ -1,13 +1,13 @@
 import React from 'react';
-import { View, Text, TextInput, Button } from 'react-native';
+import { View, Text, TextInput, Button, TouchableOpacity } from 'react-native';
 
 interface ManualMonthFormProps {
   manualYear: string;
   setManualYear: (v: string) => void;
   manualMonth: string;
   setManualMonth: (v: string) => void;
-  manualCats: { cat: string; amt: string }[];
-  setManualCats: (fn: (prev: { cat: string; amt: string }[]) => { cat: string; amt: string }[]) => void;
+  manualCats: { cat: string; amt: string; type: 'income' | 'expense' }[];
+  setManualCats: (fn: (prev: { cat: string; amt: string; type: 'income' | 'expense' }[]) => { cat: string; amt: string; type: 'income' | 'expense' }[]) => void;
   onSave: () => void;
   onCancel: () => void;
 }
@@ -33,7 +33,7 @@ const ManualMonthForm: React.FC<ManualMonthFormProps> = ({ manualYear, setManual
         maxLength={2}
       />
     </View>
-    <Text style={{ marginBottom: 4 }}>Categorías y montos:</Text>
+    <Text style={{ marginBottom: 4 }}>Categorías, montos y tipo:</Text>
     {manualCats.map((row, idx) => (
       <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
         <TextInput
@@ -49,10 +49,22 @@ const ManualMonthForm: React.FC<ManualMonthFormProps> = ({ manualYear, setManual
           keyboardType="numeric"
           style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 6, padding: 4, width: 80, marginRight: 8, textAlign: 'right' }}
         />
+        <TouchableOpacity
+          style={{ backgroundColor: row.type === 'expense' ? '#ffeaea' : '#fff', borderRadius: 4, padding: 4, marginRight: 4 }}
+          onPress={() => setManualCats(cats => cats.map((r, i) => i === idx ? { ...r, type: 'expense' } : r))}
+        >
+          <Text style={{ color: row.type === 'expense' ? '#c00' : '#888' }}>Gasto</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{ backgroundColor: row.type === 'income' ? '#eaffea' : '#fff', borderRadius: 4, padding: 4, marginRight: 8 }}
+          onPress={() => setManualCats(cats => cats.map((r, i) => i === idx ? { ...r, type: 'income' } : r))}
+        >
+          <Text style={{ color: row.type === 'income' ? '#080' : '#888' }}>Ingreso</Text>
+        </TouchableOpacity>
         <Button title="-" onPress={() => setManualCats(cats => cats.length > 1 ? cats.filter((_, i) => i !== idx) : cats)} />
       </View>
     ))}
-    <Button title="Agregar fila" onPress={() => setManualCats(cats => [...cats, { cat: '', amt: '' }])} />
+    <Button title="Agregar fila" onPress={() => setManualCats(cats => [...cats, { cat: '', amt: '', type: 'expense' }])} />
     <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
       <Button title="Cancelar" onPress={onCancel} />
       <View style={{ width: 8 }} />

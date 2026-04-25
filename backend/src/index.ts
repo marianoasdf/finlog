@@ -2,7 +2,9 @@
 import express from 'express';
 import { pool } from './db';
 import { authenticateJWT } from './authMiddleware';
+
 import authRouter from './auth';
+import authGoogleRouter from './authGoogle';
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -10,7 +12,9 @@ const port = process.env.PORT || 3001;
 app.use(express.json());
 
 // Rutas de autenticación
+
 app.use('/auth', authRouter);
+app.use('/api/auth', authGoogleRouter);
 
 app.get('/', (req, res) => {
   res.send('API funcionando');

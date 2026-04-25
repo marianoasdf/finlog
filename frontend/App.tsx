@@ -63,12 +63,12 @@ export default function App() {
   const [manualMonths, setManualMonths] = useState<{
     year: string;
     month: string;
-    categories: { cat: string; amt: number }[];
+    categories: { cat: string; amt: number; type: 'income' | 'expense' }[];
   }[]>([]);
   const [showManualMonthForm, setShowManualMonthForm] = useState(false);
   const [manualYear, setManualYear] = useState('2024');
   const [manualMonth, setManualMonth] = useState('01');
-  const [manualCats, setManualCats] = useState<{ cat: string; amt: string }[]>([{ cat: '', amt: '' }]);
+  const [manualCats, setManualCats] = useState<{ cat: string; amt: string; type: 'income' | 'expense' }[]>([{ cat: '', amt: '', type: 'expense' }]);
 
   useEffect(() => {
     const checkToken = async () => {
@@ -94,18 +94,37 @@ export default function App() {
     fetchMovements();
   }, [isAuthenticated]);
 
-  // Calcular totales y agrupaciones
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-  const balance = totalIncome - totalExpense;
+  // Calcular totales y agrupaciones SOLO para el mes actual
+  const now = new Date();
+  const currentYear = now.getFullYear().toString();
+  const currentMonth = (now.getMonth() + 1).toString().padStart(2, '0');
+
+  // Agrupar movimientos automáticos
   const grouped = groupByYearAndMonth(transactions);
-  const years = Object.keys(grouped).sort((a, b) => Number(b) - Number(a));
-  const manualGrouped: Record<string, Record<string, { cat: string; amt: number }[]>> = {};
+  // Agrupar movimientos manuales
+  const manualGrouped: Record<string, Record<string, { cat: string; amt: number; type?: string }[]>> = {};
   manualMonths.forEach(m => {
     if (!manualGrouped[m.year]) manualGrouped[m.year] = {};
-    manualGrouped[m.year][m.month] = m.categories;
+    manualGrouped[m.year][m.month] = m.categories.map(c => ({ ...c, type: c.type === 'income' ? 'income' : 'expense' }));
   });
+  const years = Object.keys(grouped).sort((a, b) => Number(b) - Number(a));
   const allYears = Array.from(new Set([...years, ...Object.keys(manualGrouped)])).sort((a, b) => Number(b) - Number(a));
+
+  // Filtrar movimientos del mes actual (automáticos)
+  const currentMonthTxs = (grouped[currentYear] && grouped[currentYear][currentMonth]) ? grouped[currentYear][currentMonth] : [];
+  // Filtrar movimientos manuales del mes actual
+  const currentManualCats = (manualGrouped[currentYear] && manualGrouped[currentYear][currentMonth]) ? manualGrouped[currentYear][currentMonth] : [];
+
+  // Calcular totales SOLO del mes actual
+  const totalIncome = [
+    ...currentMonthTxs.filter(t => t.type === 'income').map(t => t.amount),
+    ...currentManualCats.filter(c => c.type === 'income').map(c => c.amt)
+  ].reduce((sum, v) => sum + v, 0);
+  const totalExpense = [
+    ...currentMonthTxs.filter(t => t.type === 'expense').map(t => t.amount),
+    ...currentManualCats.filter(c => c.type !== 'income').map(c => c.amt)
+  ].reduce((sum, v) => sum + v, 0);
+  const balance = totalIncome - totalExpense;
 
 
   // Función para agregar transacción a la lista
@@ -193,13 +212,13 @@ export default function App() {
                   {
                     year: manualYear,
                     month: manualMonth,
-                    categories: cats.map(r => ({ cat: r.cat, amt: Number(r.amt) })),
+                    categories: cats.map(r => ({ cat: r.cat, amt: Number(r.amt), type: r.type })),
                   },
                 ]);
                 setShowManualMonthForm(false);
                 setManualYear('2024');
                 setManualMonth('01');
-                setManualCats([{ cat: '', amt: '' }]);
+                setManualCats([{ cat: '', amt: '', type: 'expense' }]);
               }}
               onCancel={() => setShowManualMonthForm(false)}
             />

@@ -15,34 +15,28 @@ const YearlySection: React.FC<YearlySectionProps> = ({ year, grouped, manualGrou
       {/* Meses automáticos */}
       {grouped[year] && Object.keys(grouped[year]).sort((a, b) => Number(b) - Number(a)).map(month => {
         const txs = grouped[year][month];
-        const totals = txs.reduce((acc: Record<string, number>, tx: any) => {
-          acc[tx.category] = (acc[tx.category] || 0) + tx.amount;
-          return acc;
-        }, {});
+        const rows = txs.map((tx: any) => ({ cat: tx.category, amt: tx.amount, type: tx.type }));
         const monthName = new Date(Number(year), Number(month) - 1).toLocaleString('es-AR', { month: 'long' });
         return (
           <MonthlySummaryTable
             key={'auto-' + month}
             monthName={monthName}
             year={year}
-            totals={totals}
+            rows={rows}
           />
         );
       })}
       {/* Meses manuales */}
       {manualGrouped[year] && Object.keys(manualGrouped[year]).sort((a, b) => Number(b) - Number(a)).map(month => {
         const cats = manualGrouped[year][month];
-        const totals = cats.reduce((acc: Record<string, number>, curr: any) => {
-          acc[curr.cat] = (acc[curr.cat] || 0) + curr.amt;
-          return acc;
-        }, {});
+        const rows = cats.map((curr: any) => ({ cat: curr.cat, amt: curr.amt, type: curr.type || 'expense' }));
         const monthName = new Date(Number(year), Number(month) - 1).toLocaleString('es-AR', { month: 'long' });
         return (
           <MonthlySummaryTable
             key={'manual-' + month}
             monthName={monthName}
             year={year}
-            totals={totals}
+            rows={rows}
           />
         );
       })}
