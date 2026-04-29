@@ -33,7 +33,10 @@ export default function LoginRegisterScreen(props: Props) {
       <Button
         title="Entrar con Google"
         onPress={() => {
-          window.location.href = 'https://finlog-7cfz.onrender.com/api/auth/google';
+          const apiUrl = process.env.EXPO_PUBLIC_API_URL
+            ? process.env.EXPO_PUBLIC_API_URL + '/api/auth/google'
+            : 'https://finlog-7cfz.onrender.com/api/auth/google';
+          window.location.href = apiUrl;
         }}
         color="#4285F4"
       />

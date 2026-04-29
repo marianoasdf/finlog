@@ -41,3 +41,6 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAU
 ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255);
 -- Google Auth: columna para guardar el sub de Google
 ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255);
+
+-- Columna para marcar movimientos como históricos (cerrados)
+ALTER TABLE movements ADD COLUMN IF NOT EXISTS is_historical BOOLEAN NOT NULL DEFAULT FALSE;

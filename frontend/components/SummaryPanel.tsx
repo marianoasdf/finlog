@@ -1,5 +1,7 @@
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { formatPesoAR } from '../utils/api';
 
 interface Props {
   totalIncome: number;
@@ -9,22 +11,22 @@ interface Props {
 
 const SummaryPanel: React.FC<Props> = ({ totalIncome, totalExpense, balance }) => (
   <View style={styles.summary}>
-    <Text style={styles.summaryText}>Ganado: ${totalIncome.toLocaleString()}</Text>
-    <Text style={styles.summaryText}>Gastado: ${totalExpense.toLocaleString()}</Text>
-    <Text style={[styles.summaryText, { fontWeight: 'bold' }]}>Balance: ${balance.toLocaleString()}</Text>
+    <Text style={styles.summaryText}>Ganado: {formatPesoAR(totalIncome)}</Text>
+    <Text style={styles.summaryText}>Gastado: {formatPesoAR(totalExpense)}</Text>
+    <Text style={[styles.summaryText, { fontWeight: 'bold' }]}>Balance: $ {formatPesoAR(balance)}</Text>
   </View>
 );
 
 const styles = StyleSheet.create({
   summary: {
-    marginBottom: 16,
-    padding: 16,
+    marginBottom: 8,
+    padding: 8,
     backgroundColor: '#f2f2f2',
-    borderRadius: 8,
+    borderRadius: 6,
   },
   summaryText: {
-    fontSize: 18,
-    marginBottom: 4,
+    fontSize: 14,
+    marginBottom: 2,
   },
 });
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { StyleSheet, ScrollView, Button } from 'react-native';
+import { StyleSheet, ScrollView, Button, View, Text, Alert } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import SummaryPanel from './components/SummaryPanel';
 import TransactionInput from './components/TransactionInput';
@@ -55,20 +55,181 @@ function groupByYearAndMonth(transactions: Transaction[]) {
 // ...existing code...
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [input, setInput] = useState('');
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [manualType, setManualType] = useState<TransactionType | null>(null);
-  const [inputError, setInputError] = useState('');
-  const [manualMonths, setManualMonths] = useState<{
-    year: string;
-    month: string;
-    categories: { cat: string; amt: number; type: 'income' | 'expense' }[];
-  }[]>([]);
-  const [showManualMonthForm, setShowManualMonthForm] = useState(false);
-  const [manualYear, setManualYear] = useState('2024');
-  const [manualMonth, setManualMonth] = useState('01');
-  const [manualCats, setManualCats] = useState<{ cat: string; amt: string; type: 'income' | 'expense' }[]>([{ cat: '', amt: '', type: 'expense' }]);
+    // Declaraciones de estado deben ir primero
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [input, setInput] = useState('');
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [allMovements, setAllMovements] = useState<Transaction[]>([]);
+    const [manualType, setManualType] = useState<TransactionType | null>(null);
+    const [inputError, setInputError] = useState('');
+    const [manualMonths, setManualMonths] = useState<{
+      year: string;
+      month: string;
+      categories: { cat: string; amt: number; type: 'income' | 'expense' }[];
+    }[]>([]);
+    const [showManualMonthForm, setShowManualMonthForm] = useState(false);
+    const [manualYear, setManualYear] = useState('2024');
+    const [manualMonth, setManualMonth] = useState('01');
+    const [manualCats, setManualCats] = useState<{ cat: string; amt: string; type: 'income' | 'expense' }[]>([{ cat: '', amt: '', type: 'expense' }]);
+
+    // Agrupar todos los movimientos (incluyendo históricos)
+    const grouped = groupByYearAndMonth(allMovements);
+    // Agrupar movimientos manuales
+    const manualGrouped: Record<string, Record<string, { cat: string; amt: number; type?: string }[]>> = {};
+    manualMonths.forEach(m => {
+      if (!manualGrouped[m.year]) manualGrouped[m.year] = {};
+      manualGrouped[m.year][m.month] = m.categories.map(c => ({ ...c, type: c.type === 'income' ? 'income' : 'expense' }));
+    });
+    const years = Object.keys(grouped).sort((a, b) => Number(b) - Number(a));
+    const allYears = Array.from(new Set([...years, ...Object.keys(manualGrouped)])).sort((a, b) => Number(b) - Number(a));
+
+    // Filtrar movimientos del mes actual (automáticos)
+    const now = new Date();
+    const currentYear = now.getFullYear().toString();
+    const currentMonth = (now.getMonth() + 1).toString().padStart(2, '0');
+    const currentMonthTxs = (grouped[currentYear] && grouped[currentYear][currentMonth]) ? grouped[currentYear][currentMonth] : [];
+    // Filtrar movimientos manuales del mes actual
+    const currentManualCats = (manualGrouped[currentYear] && manualGrouped[currentYear][currentMonth]) ? manualGrouped[currentYear][currentMonth] : [];
+
+    // Calcular totales SOLO del mes actual
+    // Asegurar que todos los montos sean números válidos
+    const safeNumber = (v: any) => {
+      const n = Number(v);
+      return isNaN(n) ? 0 : n;
+    };
+    const totalIncome = [
+      ...currentMonthTxs.filter(t => t.type === 'income').map(t => safeNumber(t.amount)),
+      ...currentManualCats.filter(c => c.type === 'income').map(c => safeNumber(c.amt))
+    ].reduce((sum, v) => sum + v, 0);
+    const totalExpense = [
+      ...currentMonthTxs.filter(t => t.type === 'expense').map(t => safeNumber(t.amount)),
+      ...currentManualCats.filter(c => c.type !== 'income').map(c => safeNumber(c.amt))
+    ].reduce((sum, v) => sum + v, 0);
+    const balance = totalIncome - totalExpense;
+
+    // Obtener movimientos protegidos al autenticar
+    const fetchMovements = async () => {
+      try {
+        const res = await authFetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/movements?historical=false`);
+        if (!res.ok) throw new Error('Error al obtener movimientos');
+        const data = await res.json();
+        setTransactions(data.map((t: any) => ({
+          ...t,
+          date: new Date(t.date),
+          category: t.category || t.cat || '', // Unifica nombre de propiedad
+        })));
+      } catch (err) {
+        console.warn('Error al obtener movimientos:', err);
+      }
+    };
+
+    // Trae todos los movimientos (incluyendo históricos) para las tablas
+    const fetchAllMovements = async () => {
+      try {
+        const res = await authFetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/movements`);
+        if (!res.ok) throw new Error('Error al obtener movimientos');
+        const data = await res.json();
+        setAllMovements(data.map((t: any) => ({
+          ...t,
+          date: new Date(t.date),
+          category: t.category || t.cat || '',
+        })));
+      } catch (err) {
+        console.warn('Error al obtener movimientos:', err);
+      }
+    };
+    useEffect(() => {
+      if (!isAuthenticated) return;
+      fetchMovements();
+      fetchAllMovements();
+    }, [isAuthenticated]);
+
+    // Handler para el input y botón "Agregar"
+    const handleAddTransaction = async () => {
+      const parsed = parseInput(input);
+      if (!parsed) {
+        setInputError('Formato inválido. Ej: comida 8500');
+        return;
+      }
+      const { category, amount } = parsed;
+      const type = manualType ?? detectType(category);
+      try {
+        // Buscar o crear categoría
+        let category_id = null;
+        try {
+          const res = await authFetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/categories`);
+          if (res.ok) {
+            const allCats = await res.json();
+            const found = allCats.find((c: any) => c.name.toLowerCase() === category.toLowerCase());
+            if (found) category_id = found.id;
+          }
+        } catch {}
+        if (!category_id) {
+          try {
+            const res = await authFetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/categories`, {
+              method: 'POST',
+              body: JSON.stringify({ name: category })
+            });
+            if (res.ok) {
+              const created = await res.json();
+              category_id = created.id;
+            }
+          } catch {}
+        }
+        if (!category_id) throw new Error('No se pudo obtener categoría');
+        // Guardar movimiento
+        const res = await authFetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/movements`, {
+          method: 'POST',
+          body: JSON.stringify({
+            type,
+            category_id,
+            amount,
+            date: new Date().toISOString(),
+          }),
+        });
+        if (!res.ok) throw new Error('Error al guardar en backend');
+        const saved = await res.json();
+        const newTx = { ...saved, date: new Date(saved.date), category };
+        setTransactions(prev => [newTx, ...prev]);
+        setAllMovements(prev => [newTx, ...prev]);
+        setInput('');
+        setManualType(null);
+        setInputError('');
+      } catch (err) {
+        setInputError('No se pudo guardar en backend');
+      }
+    };
+
+  // Cerrar mes automáticamente el último día del mes
+  const [autoClosed, setAutoClosed] = useState(false);
+  useEffect(() => {
+    if (!isAuthenticated || autoClosed || allMovements.length === 0) return;
+    const today = new Date();
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    if (today.getDate() === lastDay) {
+      const yearStr = today.getFullYear().toString();
+      const monthStr = (today.getMonth() + 1).toString().padStart(2, '0');
+      // Verificar si ya está cerrado
+      const alreadyClosed = allMovements.some(
+        t => t.date.getFullYear().toString() === yearStr &&
+             (t.date.getMonth() + 1).toString().padStart(2, '0') === monthStr &&
+             (t as any).is_historical
+      );
+      if (!alreadyClosed) {
+        setAutoClosed(true);
+        (async () => {
+          try {
+            await authFetch(
+              `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/months/close`,
+              { method: 'POST', body: JSON.stringify({ year: yearStr, month: monthStr }) }
+            );
+            fetchMovements();
+            fetchAllMovements();
+          } catch {}
+        })();
+      }
+    }
+  }, [isAuthenticated, allMovements]);
 
   useEffect(() => {
     const checkToken = async () => {
@@ -77,94 +238,6 @@ export default function App() {
     };
     checkToken();
   }, []);
-
-  // Obtener movimientos protegidos al autenticar
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const fetchMovements = async () => {
-      try {
-        const res = await authFetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001/auth'}/../movements`);
-        if (!res.ok) throw new Error('Error al obtener movimientos');
-        const data = await res.json();
-        setTransactions(data.map((t: any) => ({ ...t, date: new Date(t.date) })));
-      } catch (err) {
-        setTransactions([]);
-      }
-    };
-    fetchMovements();
-  }, [isAuthenticated]);
-
-  // Calcular totales y agrupaciones SOLO para el mes actual
-  const now = new Date();
-  const currentYear = now.getFullYear().toString();
-  const currentMonth = (now.getMonth() + 1).toString().padStart(2, '0');
-
-  // Agrupar movimientos automáticos
-  const grouped = groupByYearAndMonth(transactions);
-  // Agrupar movimientos manuales
-  const manualGrouped: Record<string, Record<string, { cat: string; amt: number; type?: string }[]>> = {};
-  manualMonths.forEach(m => {
-    if (!manualGrouped[m.year]) manualGrouped[m.year] = {};
-    manualGrouped[m.year][m.month] = m.categories.map(c => ({ ...c, type: c.type === 'income' ? 'income' : 'expense' }));
-  });
-  const years = Object.keys(grouped).sort((a, b) => Number(b) - Number(a));
-  const allYears = Array.from(new Set([...years, ...Object.keys(manualGrouped)])).sort((a, b) => Number(b) - Number(a));
-
-  // Filtrar movimientos del mes actual (automáticos)
-  const currentMonthTxs = (grouped[currentYear] && grouped[currentYear][currentMonth]) ? grouped[currentYear][currentMonth] : [];
-  // Filtrar movimientos manuales del mes actual
-  const currentManualCats = (manualGrouped[currentYear] && manualGrouped[currentYear][currentMonth]) ? manualGrouped[currentYear][currentMonth] : [];
-
-  // Calcular totales SOLO del mes actual
-  const totalIncome = [
-    ...currentMonthTxs.filter(t => t.type === 'income').map(t => t.amount),
-    ...currentManualCats.filter(c => c.type === 'income').map(c => c.amt)
-  ].reduce((sum, v) => sum + v, 0);
-  const totalExpense = [
-    ...currentMonthTxs.filter(t => t.type === 'expense').map(t => t.amount),
-    ...currentManualCats.filter(c => c.type !== 'income').map(c => c.amt)
-  ].reduce((sum, v) => sum + v, 0);
-  const balance = totalIncome - totalExpense;
-
-
-  // Función para agregar transacción a la lista
-  const addTransaction = (tx: Transaction) => {
-    setTransactions(prev => [tx, ...prev]);
-  };
-
-  // Handler para el input y botón "Agregar"
-  const handleAddTransaction = async () => {
-    const parsed = parseInput(input);
-    if (!parsed) {
-      setInputError('Formato inválido. Ej: comida 8500');
-      return;
-    }
-    const { category, amount } = parsed;
-    const type = manualType ?? detectType(category);
-    try {
-      const res = await authFetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/movements`, {
-        method: 'POST',
-        body: JSON.stringify({
-          type,
-          category,
-          amount,
-          date: new Date().toISOString(),
-        }),
-      });
-      if (!res.ok) throw new Error('Error al guardar en backend');
-      const saved = await res.json();
-      // El backend debe devolver el movimiento guardado (con id y date)
-      addTransaction({
-        ...saved,
-        date: new Date(saved.date),
-      });
-      setInput('');
-      setManualType(null);
-      setInputError('');
-    } catch (err) {
-      setInputError('No se pudo guardar en backend');
-    }
-  };
 
 
 
@@ -190,10 +263,17 @@ export default function App() {
           inputError={inputError}
           onAdd={handleAddTransaction}
         />
-        <TransactionList transactions={transactions} />
-        <ScrollView style={{ marginTop: 24 }}>
+        <View style={{ marginVertical: 18 }}>
+          <View style={{ marginBottom: 8 }}>
+            <Text style={{ fontWeight: 'bold', fontSize: 18, textAlign: 'left', letterSpacing: 0.5 }}>Movimientos diarios</Text>
+          </View>
+          <View style={{ borderRadius: 8, borderWidth: 1, borderColor: '#eee', backgroundColor: '#fafbfc', overflow: 'hidden', paddingBottom: 4 }}>
+            <TransactionList transactions={transactions} onDataChange={() => { fetchMovements(); fetchAllMovements(); }} />
+          </View>
+        </View>
+        <ScrollView style={{ marginTop: 12 }}>
           {allYears.map(year => (
-            <YearlySection key={year} year={year} grouped={grouped} manualGrouped={manualGrouped} />
+            <YearlySection key={year} year={year} grouped={grouped} manualGrouped={manualGrouped} onDataChange={() => { fetchMovements(); fetchAllMovements(); }} />
           ))}
           {showManualMonthForm && (
             <ManualMonthForm
@@ -203,18 +283,53 @@ export default function App() {
               setManualMonth={setManualMonth}
               manualCats={manualCats}
               setManualCats={setManualCats}
-              onSave={() => {
+              onSave={async () => {
                 if (!manualYear.match(/^\d{4}$/) || !manualMonth.match(/^\d{2}$/)) return;
                 const cats = manualCats.filter(r => r.cat && r.amt);
                 if (cats.length === 0) return;
-                setManualMonths(prev => [
-                  ...prev,
-                  {
-                    year: manualYear,
-                    month: manualMonth,
-                    categories: cats.map(r => ({ cat: r.cat, amt: Number(r.amt), type: r.type })),
-                  },
-                ]);
+                // Persistir cada movimiento en el backend
+                for (const row of cats) {
+                  // 1. Buscar o crear la categoría
+                  let category_id = null;
+                  try {
+                    // Buscar categoría
+                    const res = await authFetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/categories`);
+                    if (res.ok) {
+                      const allCats = await res.json();
+                      const found = allCats.find((c: any) => c.name.toLowerCase() === row.cat.toLowerCase());
+                      if (found) category_id = found.id;
+                    }
+                  } catch {}
+                  if (!category_id) {
+                    // Crear categoría si no existe
+                    try {
+                      const res = await authFetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/categories`, {
+                        method: 'POST',
+                        body: JSON.stringify({ name: row.cat })
+                      });
+                      if (res.ok) {
+                        const created = await res.json();
+                        category_id = created.id;
+                      }
+                    } catch {}
+                  }
+                  if (!category_id) continue; // Si no se pudo crear ni encontrar, saltea
+                  // 2. Guardar movimiento
+                  try {
+                    await authFetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001'}/movements`, {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        type: row.type,
+                        category_id,
+                        amount: Number(row.amt),
+                        date: `${manualYear}-${manualMonth}-01`,
+                      })
+                    });
+                  } catch {}
+                }
+                // Refrescar movimientos desde backend sin perder autenticación
+                await fetchAllMovements();
+                await fetchMovements();
                 setShowManualMonthForm(false);
                 setManualYear('2024');
                 setManualMonth('01');
@@ -234,7 +349,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-    padding: 16,
+    padding: 6,
   },
   summary: {
     marginBottom: 16,

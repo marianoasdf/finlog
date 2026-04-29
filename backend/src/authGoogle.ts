@@ -70,8 +70,9 @@ router.get('/google/callback', async (req, res) => {
     { expiresIn: '7d' }
   );
 
-  // Redirige al frontend con el JWT
-  res.redirect(`https://finlog-green.vercel.app/?jwt=${token}`);
+  // Al final, después de generar el JWT:
+  const FRONTEND_URL = process.env.FRONTEND_URL!;
+  res.redirect(`${FRONTEND_URL}?jwt=${token}`);
 });
 
 export default router;
