@@ -67,5 +67,16 @@ export async function authFetch(url: string, options: RequestInit = {}) {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   };
-  return fetch(url, { ...options, headers });
+  const response = await fetch(url, { ...options, headers });
+
+  // Logout automático si el backend responde 401
+  if (response.status === 401) {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem('token');
+      window.location.href = '/'; // o la ruta de login
+    }
+    await AsyncStorage.removeItem('token');
+  }
+
+  return response;
 }
