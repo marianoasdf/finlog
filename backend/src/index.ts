@@ -11,12 +11,9 @@ import authGoogleRouter from './authGoogle';
 import { pool } from './db';
 
 const app = express();
-const allowedOrigins = [];
-if (process.env.FRONTEND_URL) {
-  allowedOrigins.push(process.env.FRONTEND_URL.replace(/\/$/, ''));
-}
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
 app.use(cors({
-  origin: allowedOrigins,
+  origin: true, // Permitir todos los orígenes temporalmente para test
   credentials: true
 }));
 const port = process.env.PORT || 3001;
