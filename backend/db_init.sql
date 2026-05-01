@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS movements (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Si la columna user_id no existe, agregarla
+ALTER TABLE movements ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id) ON DELETE CASCADE;
+
 -- Tabla de usuarios para autenticación
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -31,10 +34,12 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+
 -- Índices útiles (idempotentes)
 CREATE INDEX IF NOT EXISTS idx_movements_date ON movements(date);
 CREATE INDEX IF NOT EXISTS idx_movements_category ON movements(category_id);
 CREATE INDEX IF NOT EXISTS idx_movements_year_month ON movements(year, month);
+CREATE INDEX IF NOT EXISTS idx_movements_user ON movements(user_id);
 
 -- Asegura que las columnas de verificación de email existan (idempotente)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;

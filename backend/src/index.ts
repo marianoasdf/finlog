@@ -4,11 +4,11 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 dotenv.config();
-import { pool } from './db';
-import { authenticateJWT } from './authMiddleware';
+import { authenticateJWT, AuthRequest } from './authMiddleware';
 
 import authRouter from './auth';
 import authGoogleRouter from './authGoogle';
+import { pool } from './db';
 
 const app = express();
 const allowedOrigins = [];
@@ -74,17 +74,23 @@ app.post('/categories', authenticateJWT, async (req, res) => {
 // Endpoint para listar movimientos
 // Endpoint para listar movimientos (con nombre de categoría)
 // Si ?historical=false, solo trae movimientos no históricos
-app.get('/movements', authenticateJWT, async (req, res) => {
+app.get('/movements', authenticateJWT, async (req: AuthRequest, res) => {
   try {
-    const historicalFilter = req.query.historical === 'false' ? 'WHERE m.is_historical = FALSE' : '';
-    const result = await pool.query(`
-      SELECT m.*, c.name AS category
-      FROM movements m
-      LEFT JOIN categories c ON m.category_id = c.id
-      ${historicalFilter}
-      ORDER BY m.id ASC
-      LIMIT 50
-    `);
+    const userId = req.user && req.user.id;
+    let where = 'WHERE m.user_id = $1';
+    const values = [userId];
+    if (req.query.historical === 'false') {
+      where += ' AND m.is_historical = FALSE';
+    }
+    const result = await pool.query(
+      `SELECT m.*, c.name AS category
+       FROM movements m
+       LEFT JOIN categories c ON m.category_id = c.id
+       ${where}
+       ORDER BY m.id ASC
+       LIMIT 50`,
+      values
+    );
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -93,15 +99,17 @@ app.get('/movements', authenticateJWT, async (req, res) => {
 });
 
 // Endpoint para crear un movimiento
-app.post('/movements', authenticateJWT, async (req, res) => {
+app.post('/movements', authenticateJWT, async (req: AuthRequest, res) => {
   const { type, category_id, amount, date } = req.body;
+  const userId = req.user && req.user.id;
+  if (!userId) return res.status(401).json({ error: 'Usuario no autenticado' });
   if (!type || !category_id || amount == null || !date) {
     return res.status(400).json({ error: 'Faltan campos requeridos: type, category_id, amount, date' });
   }
   try {
     const result = await pool.query(
-      `INSERT INTO movements (type, category_id, amount, date) VALUES ($1, $2, $3, $4) RETURNING *`,
-      [type, category_id, amount, date]
+      `INSERT INTO movements (user_id, type, category_id, amount, date) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [userId, type, category_id, amount, date]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -111,9 +119,11 @@ app.post('/movements', authenticateJWT, async (req, res) => {
 });
 
 // Endpoint para editar un movimiento existente
-app.patch('/movements/:id', authenticateJWT, async (req, res) => {
+app.patch('/movements/:id', authenticateJWT, async (req: AuthRequest, res) => {
   const { id } = req.params;
   const { type, category_id, amount, date } = req.body;
+  const userId = req.user && req.user.id;
+  if (!userId) return res.status(401).json({ error: 'Usuario no autenticado' });
   if (!type && !category_id && !amount && !date) {
     return res.status(400).json({ error: 'No hay campos para actualizar' });
   }
@@ -130,8 +140,8 @@ app.patch('/movements/:id', authenticateJWT, async (req, res) => {
   }
   try {
     const result = await pool.query(
-      `UPDATE movements SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
-      [...values, id]
+      `UPDATE movements SET ${fields.join(', ')} WHERE id = $${idx} AND user_id = $${idx + 1} RETURNING *`,
+      [...values, id, userId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Movimiento no encontrado' });
@@ -144,7 +154,7 @@ app.patch('/movements/:id', authenticateJWT, async (req, res) => {
 });
 
 // Endpoint para cerrar el mes actual (marca movimientos como históricos)
-app.post('/months/close', authenticateJWT, async (req, res) => {
+app.post('/months/close', authenticateJWT, async (req: AuthRequest, res) => {
   const { year, month } = req.body;
   if (!year || !month) {
     return res.status(400).json({ error: 'Faltan year y month' });
@@ -166,12 +176,14 @@ app.post('/months/close', authenticateJWT, async (req, res) => {
 });
 
 // Endpoint para eliminar un movimiento individual
-app.delete('/movements/:id', authenticateJWT, async (req, res) => {
+app.delete('/movements/:id', authenticateJWT, async (req: AuthRequest, res) => {
   const { id } = req.params;
+  const userId = req.user && req.user.id;
+  if (!userId) return res.status(401).json({ error: 'Usuario no autenticado' });
   try {
     const result = await pool.query(
-      'DELETE FROM movements WHERE id = $1 RETURNING *',
-      [id]
+      'DELETE FROM movements WHERE id = $1 AND user_id = $2 RETURNING *',
+      [id, userId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Movimiento no encontrado' });
