@@ -44,7 +44,7 @@ router.post('/google', async (req, res) => {
     }
     // Generar token JWT propio
     const token = jwt.sign(
-      { userId: user.id, email: user.email, username: user.username },
+      { id: user.id, email: user.email, username: user.username },
       process.env.JWT_SECRET || 'secret',
       { expiresIn: '7d' }
     );
@@ -98,7 +98,7 @@ router.post('/login', async (req, res) => {
     }
     // Generar token JWT
     const token = jwt.sign(
-      { userId: user.id, email: user.email, username: user.username },
+      { id: user.id, email: user.email, username: user.username },
       process.env.JWT_SECRET || 'secret',
       { expiresIn: '7d' }
     );

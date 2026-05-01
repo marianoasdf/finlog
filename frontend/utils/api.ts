@@ -58,7 +58,10 @@ export function formatPesoAR(n: number): string {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export async function authFetch(url: string, options: RequestInit = {}) {
-  const token = await AsyncStorage.getItem('token');
+  let token = await AsyncStorage.getItem('token');
+  if (!token && typeof window !== 'undefined' && window.localStorage) {
+    token = window.localStorage.getItem('token');
+  }
   const headers = {
     ...(options.headers || {}),
     Authorization: `Bearer ${token}`,

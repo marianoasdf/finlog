@@ -76,7 +76,8 @@ app.post('/categories', authenticateJWT, async (req, res) => {
 // Si ?historical=false, solo trae movimientos no históricos
 app.get('/movements', authenticateJWT, async (req: AuthRequest, res) => {
   try {
-    const userId = req.user && req.user.id;
+    const userId = getUserId(req.user);
+    if (!userId) return res.status(401).json({ error: 'Usuario no autenticado' });
     let where = 'WHERE m.user_id = $1';
     const values = [userId];
     if (req.query.historical === 'false') {
@@ -101,7 +102,7 @@ app.get('/movements', authenticateJWT, async (req: AuthRequest, res) => {
 // Endpoint para crear un movimiento
 app.post('/movements', authenticateJWT, async (req: AuthRequest, res) => {
   const { type, category_id, amount, date } = req.body;
-  const userId = req.user && req.user.id;
+  const userId = getUserId(req.user);
   if (!userId) return res.status(401).json({ error: 'Usuario no autenticado' });
   if (!type || !category_id || amount == null || !date) {
     return res.status(400).json({ error: 'Faltan campos requeridos: type, category_id, amount, date' });
@@ -122,7 +123,7 @@ app.post('/movements', authenticateJWT, async (req: AuthRequest, res) => {
 app.patch('/movements/:id', authenticateJWT, async (req: AuthRequest, res) => {
   const { id } = req.params;
   const { type, category_id, amount, date } = req.body;
-  const userId = req.user && req.user.id;
+  const userId = getUserId(req.user);
   if (!userId) return res.status(401).json({ error: 'Usuario no autenticado' });
   if (!type && !category_id && !amount && !date) {
     return res.status(400).json({ error: 'No hay campos para actualizar' });
@@ -159,11 +160,13 @@ app.post('/months/close', authenticateJWT, async (req: AuthRequest, res) => {
   if (!year || !month) {
     return res.status(400).json({ error: 'Faltan year y month' });
   }
+  const userId = getUserId(req.user);
+  if (!userId) return res.status(401).json({ error: 'Usuario no autenticado' });
   const monthNum = parseInt(month, 10);
   try {
     const result = await pool.query(
-      `UPDATE movements SET is_historical = TRUE WHERE year = $1 AND month = $2 RETURNING *`,
-      [year, monthNum]
+      `UPDATE movements SET is_historical = TRUE WHERE year = $1 AND month = $2 AND user_id = $3 RETURNING *`,
+      [year, monthNum, userId]
     );
     res.json({
       message: `Mes ${year}-${month} cerrado`,
@@ -178,7 +181,7 @@ app.post('/months/close', authenticateJWT, async (req: AuthRequest, res) => {
 // Endpoint para eliminar un movimiento individual
 app.delete('/movements/:id', authenticateJWT, async (req: AuthRequest, res) => {
   const { id } = req.params;
-  const userId = req.user && req.user.id;
+  const userId = getUserId(req.user);
   if (!userId) return res.status(401).json({ error: 'Usuario no autenticado' });
   try {
     const result = await pool.query(
@@ -209,3 +212,6 @@ app.listen(port, () => {
     }, interval);
   }
 });
+
+// Obtiene el userId desde el JWT, sea 'id' o 'userId'
+const getUserId = (user: any) => user && (user.id || user.userId);
